@@ -1,40 +1,47 @@
-const MongoClient = require('mongodb').MongoClient;
-const axios = require('axios');
 const prompts = require('prompts');
 const dgram = require('dgram');
 const client = dgram.createSocket('udp4');
+const udp = require('dgram');
+//const server = udp.createSocket('udp4');
 
 // Send PING to RCOM
-const sendPingToRcom = (ip, port, callback) => {
-    const ping = JSON.stringify({"connection test":"do not react!"}); 
+const sendPingToRcom = async (ip, port, callback) => {
+    const ping = JSON.stringify({"connection test":"ignore this message!"}); 
     let sent = 0;
     let received = 0;
+    const brk = 19;
 
-    for (let i = 0; i < 10; i++){        
+   
 
-        (() => {
-            setTimeout(() => {
-                client.send(ping, port, ip, (err, bytes) => {
+    for (let i = 0; i <= brk; i++){  
+        const server = udp.createSocket('udp4');         
+
+        (async () => {
+            await setTimeout( async () => {
+              
+                server.send(ping, port, ip, (err, bytes) => {
                     if(err){
-                        console.log(err);
+                        console.log(err);                            
                         client.close();
                     };
-                    console.log('Sent bytes: ', bytes);  
+                    console.log(`\nSent ${bytes} bytes to RCOM`);  
                     sent++;    
-                });
+                });                
             
-                client.on('message', (msg, info) => {
-                    console.log('Data received from server : ' + msg.toString());
-                    console.log('Received %d bytes from %s:%d\n',msg.length, info.address, info.port); 
+                server.on('message', (msg, info) => {
+                    console.log(`RCOM response: ${msg.toString()}`);                        
                     received++;                   
+                    //server.close();                      
                 });
-            }, 1000 * i);
-        })(i);        
-        
-    }  
 
-    //client.close();
-    callback(sent, received);
+                if(i === brk){
+                    setTimeout(() => {                      
+                        callback(sent, received);                      
+                    }, 3000); 
+                }                
+            }, 100 * i);         
+        })();        
+    }  
 };
 
 const sleep = (timeout) => {
@@ -43,31 +50,27 @@ const sleep = (timeout) => {
     });
 };
 
+
 (async () => {
-    console.log('Application to test udp connection with RCOM');
+    console.log('Application to test udp connection to RCOM\n');
 
-    // const rcomIp = await prompts({
-    //     type: 'text',
-    //     name: 'value',
-    //     message: 'Enter RCOM IP: ',
-    //     //validate: value => value <= 0 || value > 1000 ? `Please enter a valid number from 1 to 1000` : true
-    // });
+    const rcomIp = await prompts({
+        type: 'text',
+        name: 'value',
+        message: 'Enter RCOM IP: ',
+        //validate: value => value <= 0 || value > 1000 ? `Please enter a valid number from 1 to 1000` : true
+    });
 
-    // const rcomPort = await prompts({
-    //     type: 'number',
-    //     name: 'value',
-    //     message: 'Enter RCOM PORT: ',
-    //     //validate: value => value <= 0 || value > 1000 ? `Please enter a valid number from 1 to 1000` : true
-    // });
-
-    //await sendPingToRcom(rcomIp, rcomPort);
-
-    await sendPingToRcom('194.187.110.62', 15004, async (sent, received) => {
-        console.log(`Packets: Sent = ${sent}, Received = ${received}, Lost = ${sent - received} (${(received * 100) / sent }% lost)` );
-
-        console.log('\nApplication will be closed automatilally in 1 minute');
-        await sleep(10000);
-        client.close();
+    const rcomPort = await prompts({
+        type: 'number',
+        name: 'value',
+        message: 'Enter RCOM PORT: ',
+        validate: value => value <= 0 || value > 65535 ? `Please enter a valid port from 1 to 65535` : true
+    });    
+ 
+    await sendPingToRcom(rcomIp.value, rcomPort.value, async (sent, received) => {       
+        console.log(`\n\nPackets: Sent = ${sent}, Received = ${received}, Lost = ${sent - received} (${(100 - (received * 100) / sent).toFixed(0) }% lost)\n` ); 
+        await sleep(1000);    
     });
 
 })();
